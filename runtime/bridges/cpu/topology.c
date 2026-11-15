@@ -2,7 +2,9 @@
 // CPU bridge: the host's cores from /sys/devices/system/cpu, the vCPU plan XNU's topology is made
 // from (P = the big and prime cores, E = the little ones), and the placement of host threads.
 // On the Galaxy S24 Ultra (SM8650): cpu0-1 Cortex-A520 (capacity-dmips-mhz 1024), cpu2-6 Cortex-A720
-// (1792), cpu7 Cortex-X4 (1894); docs/hardware.md has the sources. Linux keeps clock control: the
+// (1792), cpu7 Cortex-X4 (1894); docs/hardware.md has the sources. On the S25 Ultra (SM8750) the
+// kinds differ (Oryon) but the bridge still reads capacities and cpufreq from sysfs; see
+// docs/port-s25-ultra.md and make_sm8750 in tests/test_bridges.c. Linux keeps clock control: the
 // only frequency input from the guest is a utilisation clamp.
 #define _GNU_SOURCE
 #include "bridges/bridges.h"

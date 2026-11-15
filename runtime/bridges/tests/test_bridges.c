@@ -103,6 +103,35 @@ static void put_file(const char *root, const char *rel, const char *text)
 
 // A /sys/devices/system/cpu shaped like an SM8650's (made-up frequencies and capacities, the real core kinds):
 // cpu0-1 A520, cpu2-6 A720 in two frequency domains, cpu7 X4.
+// SM8750 (Snapdragon 8 Elite): 8 Oryon cores; Linux capacity order is host-specific — two
+// lowest treated as E, six as P (see docs/port-s25-ultra.md). Frequencies are placeholders.
+static void make_sm8750(const char *root)
+{
+  static const struct { unsigned capacity, max, min, policy, midr; const char *table; } cpus[8] = {
+    { 400, 3532800, 499200, 0, 0x410fd800, "499200 1209600 1612800 2035200 2515200 2956800 3398400 3532800" },
+    { 400, 3532800, 499200, 0, 0x410fd800, NULL },
+    { 1200, 4320000, 499200, 2, 0x410fd801, "499200 1612800 2188800 2841600 3532800 4320000" },
+    { 1200, 4320000, 499200, 2, 0x410fd801, NULL }, { 1200, 4320000, 499200, 2, 0x410fd801, NULL },
+    { 1200, 4320000, 499200, 3, 0x410fd801, NULL }, { 1200, 4320000, 499200, 3, 0x410fd801, NULL },
+    { 1200, 4320000, 499200, 4, 0x410fd801, NULL },
+  };
+  for (unsigned i = 0; i < 8; i++) {
+    char rel[128], text[512];
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cpu_capacity", i); snprintf(text, sizeof text, "%u\n", cpus[i].capacity); put_file(root, rel, text);
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cpufreq/cpuinfo_max_freq", i); snprintf(text, sizeof text, "%u\n", cpus[i].max); put_file(root, rel, text);
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cpufreq/cpuinfo_min_freq", i); snprintf(text, sizeof text, "%u\n", cpus[i].min); put_file(root, rel, text);
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cpufreq/related_cpus", i); snprintf(text, sizeof text, "%u %u\n", cpus[i].policy, i); put_file(root, rel, text);
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/regs/identification/midr_el1", i); snprintf(text, sizeof text, "0x%016x\n", cpus[i].midr); put_file(root, rel, text);
+    if (cpus[i].table) { snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cpufreq/scaling_available_frequencies", i); snprintf(text, sizeof text, "%s \n", cpus[i].table); put_file(root, rel, text); }
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index0/level", i); put_file(root, rel, "1\n");
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index0/type", i); put_file(root, rel, "Data\n");
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index0/size", i); put_file(root, rel, "64K\n");
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index2/level", i); put_file(root, rel, "2\n");
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index2/type", i); put_file(root, rel, "Unified\n");
+    snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index2/size", i); put_file(root, rel, "512K\n");
+  }
+}
+
 static void make_sm8650(const char *root)
 {
   static const struct { unsigned capacity, max, min, policy, midr; const char *table; } cpus[8] = {
@@ -129,6 +158,20 @@ static void make_sm8650(const char *root)
     snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index2/type", i); put_file(root, rel, "Unified\n");
     snprintf(rel, sizeof rel, "devices/system/cpu/cpu%u/cache/index2/size", i); put_file(root, rel, i == 7 ? "2048K\n" : i < 2 ? "256K\n" : "512K\n");
   }
+}
+
+static void test_cpu_sm8750(const char *tmp)
+{
+  char root[400];
+  snprintf(root, sizeof root, "%s/sys8750", tmp);
+  make_sm8750(root);
+  br_cpu_topology t;
+  CHECK(br_cpu_read(root, &t) == 0);
+  CHECK(t.ncpu == 8 && t.n_e == 2 && t.n_p == 6);
+  CHECK(t.cpu[0].type == 'E' && t.cpu[2].type == 'P');
+  br_cpu_plan plan;
+  CHECK(br_cpu_plan_make(&t, 8, false, &plan) == 0);
+  CHECK(plan.n_e == 2 && plan.n_p == 6);
 }
 
 static void test_cpu(const char *tmp)
@@ -920,6 +963,7 @@ int main(void)
   char tmp[] = "/tmp/oneios-bridges-XXXXXX";
   if (!mkdtemp(tmp)) return 2;
   test_cpu(tmp);
+  test_cpu_sm8750(tmp);
   test_haptic();
   test_net();
   test_bt(tmp);

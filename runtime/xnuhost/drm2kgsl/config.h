@@ -31,5 +31,7 @@
 #define HAVE_EVENTFD_H 1
 #define ENABLE_DRM 1
 #define ENABLE_DRM2KGSL 1
+/* xnuhost/gpuctl use drm_timeline fences only; no virtio fence export table. */
+#define ONEIOS_XNUHOST 1
 #define UTIL_ARCH_LITTLE_ENDIAN 1
 #define UTIL_ARCH_BIG_ENDIAN 0

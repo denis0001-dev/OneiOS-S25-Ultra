@@ -52,7 +52,7 @@ DRM2KGSL_PATCHES := $(sort $(wildcard drm2kgsl/patches/*.patch))
 $(A)/drm2kgsl/patched/drm2kgsl_renderer.c: $(VIRGL)/src/drm/drm2kgsl/drm2kgsl_renderer.c $(DRM2KGSL_PATCHES)
 	@mkdir -p $(A)/drm2kgsl/patched
 	cp $< $@.tmp
-	for p in $(DRM2KGSL_PATCHES); do patch -s --no-backup-if-mismatch -F0 $@.tmp < $$p || exit 1; done
+	for p in $(DRM2KGSL_PATCHES); do patch -s --forward --no-backup-if-mismatch -F0 $@.tmp < $$p || exit 1; done
 	mv $@.tmp $@
 $(A)/drm2kgsl/drm2kgsl_renderer.o: $(A)/drm2kgsl/patched/drm2kgsl_renderer.c drm2kgsl/config.h
 	$(ANDROID_CC) -std=gnu11 -O2 -g -w $(VIRGL_INC) -c $< -o $@

@@ -21,6 +21,7 @@
 #include "virgl_context.h"
 #include "virgl_resource.h"
 #include "virgl_util.h"
+#include "virgl_fence.h"
 #include "drm_hw.h"
 #include "drm2kgsl/drm2kgsl_renderer.h"
 #include "oneios_drm2kgsl.h"
@@ -705,7 +706,11 @@ xh_gpu3d *xh_gpu3d_kgsl_open(int ram_fd, uint64_t ram_phys, uint64_t ram_size, v
   kgsl *k = calloc(1, sizeof *k);
   if (!k) { snprintf(reason, sizeof reason, "no memory"); return NULL; }
   virgl_log_set_handler(virgl_line, NULL, NULL);
-  if (virgl_context_table_init() || virgl_resource_table_init(NULL)) { snprintf(reason, sizeof reason, "no memory for the renderer's tables"); free(k); return NULL; }
+  if (virgl_context_table_init() || virgl_resource_table_init(NULL) || virgl_fence_table_init()) {
+    snprintf(reason, sizeof reason, "no memory for the renderer's tables");
+    free(k);
+    return NULL;
+  }
   int fd = open(KGSL_DEVICE_NODE, O_RDWR | O_CLOEXEC);
   k->capset.context_type = VIRTGPU_DRM_CONTEXT_MSM;
   int r = fd < 0 ? -errno : drm2kgsl_renderer_probe(fd, &k->capset);       // keeps its own descriptor for the VBO

@@ -1,0 +1,26 @@
+--- a/src/drm/drm2kgsl/drm2kgsl_renderer.c	2026-11-15 14:11:58
++++ b/src/drm/drm2kgsl/drm2kgsl_renderer.c	2026-11-15 14:11:58
+@@ -229,9 +229,11 @@
+       ((cached ? KGSL_CACHEMODE_WRITEBACK : KGSL_CACHEMODE_WRITECOMBINE) << KGSL_CACHEMODE_SHIFT);
+ }
+ 
+-/* WAITTIMESTAMP_CTXTID is slower than the sync_file path on Adreno 830.
+- * Keep the optimization enabled for other GPUs, while allowing explicit A/B
+- * overrides without changing the default behavior for existing devices. */
++/* WAITTIMESTAMP_CTXTID vs TIMESTAMP_EVENT(FENCE)+sync_file. On Adreno 830 the
++ * FENCE path was faster on early bring-up kernels, but Galaxy S25 (SM8750,
++ * chip 0x44050000) segfaults userspace on the first TIMESTAMP_EVENT(FENCE)
++ * after a successful GPU_COMMAND (gpuctl submit, xnuhost backboardd). Default
++ * to the timestamp path everywhere; NCTX_NO_WAITTS forces FENCE for A/B. */
+ static bool
+ kgsl_use_wait_timestamp(void)
+ {
+@@ -239,7 +241,7 @@
+       return false;
+    if (getenv("NCTX_WAITTS"))
+       return true;
+-   return g_chip_id != KGSL_A830_CHIP_ID;
++   return true;
+ }
+ 
+ static void

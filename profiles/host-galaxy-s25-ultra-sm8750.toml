@@ -1,0 +1,35 @@
+# Host profile for OneiOS on Galaxy S25 Ultra (Snapdragon). Not Apple's IPSW profile.
+# Used by port docs and future host-aware checks; the guest image stays profiles/ios-27.0.1-iPhone18,2.toml.
+
+[host]
+label = "Galaxy S25 Ultra"
+model_prefix = "SM-S938"
+codename = "pa3q"
+soc = "SM8750"
+platform = "sun"  # Qualcomm DT name; verify on device via ro.board.platform
+oneos_profile_id = "s-ultra-8750"
+form = "bar"
+
+[cpu]
+# Snapdragon 8 Elite: 8x Oryon (2 prime + 6 performance). Linux exposes capacities via cpu_capacity;
+# the CPU bridge (runtime/bridges/cpu) classifies lowest-capacity CPUs as E, rest as P.
+nvcpu_default = 8
+note = "Re-read sysfs on device; do not assume Cortex part IDs from S24."
+
+[gpu]
+chip_name = "Adreno 830"
+kgsl_device = "/dev/kgsl-3d0"
+path = "virtio-gpu 3D -> drm2kgsl -> KGSL (same stack as S24)"
+# S24 Ultra measured values (SM8650, Adreno 750) for comparison — replace after gpuctl on S25:
+#   chip 0x43051400, gpu id 6770, gmem 3072 KiB
+s24_reference_gpu_id = 6770
+status = "unverified_on_sm8750"
+
+[display]
+# Same class as S24 Ultra bar: QHD+ panel; exact modes from One UI, not copied from S24.
+native_resolution = "verify_via_oneui"
+oneios_display = "oneios-display + surfaceflinger layer"
+
+[switch]
+stage = "/data/local/tmp/oneios"
+session_abi = 1
