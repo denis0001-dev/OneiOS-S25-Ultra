@@ -1,18 +1,54 @@
 # OneiOS
 
-iOS 27 next to One UI on a rooted Samsung Galaxy S24 Ultra (SM-S928, SM8650), switched to and back
-the way [OneOS](https://github.com/fahadalijaved/OneOS) switches to another Android: nothing flashed,
-the image lives in a folder, One UI's kernel keeps running.
+**This repository** ([denis0001-dev/OneiOS-S25-Ultra](https://github.com/denis0001-dev/OneiOS-S25-Ultra)) is a fork of [akshaynexus/OneiOS](https://github.com/akshaynexus/OneiOS) that adds an experimental **Galaxy S25 Ultra** bring-up (**SM-S938***, `pa3q`, **SM8750** / Adreno 830). Upstream targets the **Galaxy S24 Ultra** (`SM-S928`, **SM8650**). Both run **iOS 27.0.1** (`24A446`, iPhone 18,2) next to One UI: nothing is flashed; runtime and image live under `/data/local/tmp/oneios`; **xnuhost** runs source-built **XNU** as a process on One UI’s Linux kernel.
 
-OneOS's guests are Android systems that run unchanged on One UI's Linux kernel. iOS's userland needs
-Apple's kernel (XNU), so OneiOS runs a source-built XNU **as a process on One UI's kernel**
-(`runtime/xnuhost`): iOS's processes are Linux processes whose system calls and faults go to it. The
-image, the switch and the return stay OneOS-shaped. How it fits together: [docs/architecture.md](docs/architecture.md).
-How to build and test it: [docs/building.md](docs/building.md).
+How it fits together: [docs/architecture.md](docs/architecture.md). How to build: [docs/building.md](docs/building.md). **S25 port details:** [docs/port-s25-ultra.md](docs/port-s25-ultra.md).
 
-## Status
+## Galaxy S25 Ultra (this fork)
 
-**Experimental. On the phone (S24 Ultra, 2026-11-11) the boot reaches launchd, backboardd and SpringBoard, and backboardd's first frames are on the panel: the Apple boot logo at 1440x3120. Whether it goes on to SpringBoard's own screen is not yet seen.**
+| | |
+|---|---|
+| **Host** | Rooted Snapdragon S25 Ultra; KernelSU tested; OneOS **oneios** branch with `s-ultra-8750` gating (app + `oneios_switch.sh` live in a sibling **OneOS** checkout — not in this git tree). |
+| **Guest** | Same iOS 27 image set and `kernel.kc` series as upstream until integration forces a change. |
+| **Runtime** | Build or ship `oneios-runtime-*-s25dev-arm64` from this tree; staged `bin/xnuhost` **must** include SM8750 **drm2kgsl** fixes (patch `0007-a830-waittimestamp-fences`, `virgl_fence_table_init`, `ONEIOS_XNUHOST` — see port doc). Stock release `xnuhost` alone is not enough on Adreno 830. |
+| **On-device (Nov 2025)** | `gpuctl` OK (chip `0x44050000`, **192 GiB** GPU VA). CPU topology checks pass. Sessions with fork-built `xnuhost` reached **SpringBoard**; logo-only stalls traced to bad overlays / wrong `xnuhost` / boot-args replacing defaults — recovery steps in the port doc. Thermals and Spotlight can end long sessions. Wi‑Fi: default bridge; join once in iOS Settings (persists on `data.img`). |
+
+### Run iOS on the phone
+
+**One-time:** Import runtime + image set (OneOS app → **iOS 27 (OneiOS)** → *I have the file*, or [building.md](docs/building.md) §6 via `adb`). Install the patched OneOS APK. Stage the SM8750 `xnuhost` if you built locally.
+
+**Switch** (after staging, no PC required):
+
+```sh
+su -c 'sh /data/local/tmp/oneios/oneios_switch.sh --check'
+su -c 'sh /data/local/tmp/oneios/oneios_switch.sh'
+```
+
+Or: OneOS → **Choose a system** → **iOS 27 (OneiOS)** → experimental acknowledgment → **Switch**. Preflight may refuse if the battery is hot (~42 °C).
+
+**Return to One UI:** Volume **Up + Down** for **3 seconds**; or `oneios_return.sh`; **Power + Volume Down** reboot if stuck.
+
+**Samsung switch note:** bind+remount read-only on session **files** fails on some kernels; directories only, `chmod 555` on the session scripts (see port doc).
+
+### What this fork changes in tree
+
+- Hosted GPU path for **Adreno 830** / KGSL fence behaviour.
+- Host profile [profiles/host-galaxy-s25-ultra-sm8750.toml](profiles/host-galaxy-s25-ultra-sm8750.toml), SM8750 CPU tests in `runtime/bridges/tests/`.
+- Documentation: [docs/port-s25-ultra.md](docs/port-s25-ultra.md).
+
+**Not in scope:** Exynos S25 models; passcode, Face ID, Wallet, cellular calls/SMS; treating this as a consumer ROM.
+
+---
+
+## What OneiOS is (upstream model)
+
+OneOS guests are Android systems on One UI’s Linux kernel. iOS userland needs Apple’s kernel (XNU), so OneiOS runs XNU **inside** `runtime/xnuhost`. The image, switch, and return stay OneOS-shaped ([OneOS `oneios`](https://github.com/akshaynexus/OneOS/tree/oneios)).
+
+## Status (upstream S24 Ultra)
+
+The paragraphs below record **akshaynexus/OneiOS** phone and QEMU progress on the **S24 Ultra**. They are kept for context; **S25 validation is in the port doc and the section above.**
+
+**Experimental.** On the phone (S24 Ultra, 2026-11-11) the boot reaches launchd, backboardd and SpringBoard, and backboardd's first frames are on the panel: the Apple boot logo at 1440x3120. Whether it goes on to SpringBoard's own screen is not yet seen.
 
 Touch on the phone: in that session the DriverKit event driver was waited for, so the touch screen and the buttons
 reached backboardd only 233 s after they started (then 447 events, 11 contacts). The kernel now gives both to
@@ -47,50 +83,16 @@ the owner's swipe unlocked it, and the Home Screen showed the apps (their icons 
 no call to the panic stub in 23 minutes. This set is the phone's baseline now.
 
 On the PC (xnuhost under `qemu-aarch64`, 8 vCPUs, the real iOS 27.0.1 `24A446` image set, `kernel.kc` with the
-iPhone18,2 kexts), the boot gets through:
+iPhone18,2 kexts), the boot gets through corecrypto, AMFI, launchd, **`backboardd` and `SpringBoard`**, and SpringBoard
+in `UIApplicationMain`’s run loop ([full upstream paragraph in history / agents board](docs/agents.md)). The PC guest has no 3D GPU; the phone with KGSL is where compositing is proven on S24.
 
-- corecrypto's POST, AppleImage4, AMFI, Seatbelt, the trust caches, IOKit matching, `bsd_init`;
-- the root mount from the image set (verified by xnuhost), swap, pid 1;
-- the Data volume's first start: `newfs_apfs` (the first user process), the dyld shared cache's 4K code signatures
-  (5.8 GiB hashed once per boot, about 3 minutes under qemu), the cache mapped and slid, the volume mounted, the
-  seed unpacked and verified by the kernel;
-- **launchd**: all of its early boot tasks ("Early boot complete. Continuing system boot."), then its services:
-  123 spawned and about 190 processes in 16 minutes, with **`backboardd` and `SpringBoard` running to the end of
-  the run** (series 0001-0025, 2026-11-11; the run was stopped by its time limit, no kernel panic). The only
-  service that died was `chronod` (abort in QuartzCore's `query_displays`).
-
-**SpringBoard finishes launching**: 15 minutes into a PC boot its main thread is in `UIApplicationMain`'s run loop
-(`SBSystemAppMain` -> `UIApplicationMain` -> `GSEventRunModal`) and stays there (sampled every 5 minutes for half
-an hour with `oneios-ubt`); backboardd sits in its run loops with CoreAnimation's render server and IOMFB server
-threads up.
-
-Not reached: a frame of iOS's on the display, `session/ready`. The guest has an IOMobileFramebuffer since `0020`
-(`kernel/patches/oneios-hosted/display/`: it starts, backboardd opens it), and `display.sock` shows one flat colour
-about twice a second. On the PC the guest has no 3D GPU (`oneios-gpu: the host offers no 3D`, so no Metal
-accelerator); whether that is why backboardd composites nothing is the likely reason, not a proven one: the phone,
-with KGSL, is where it shows. Touch and the side keys are
-in (`kernel/patches/oneios-hosted/hid/`): a Digitizer / Touch Screen service and a buttons service that backboardd
-opens and gets events from, fed from xnuhost's input device (scripted touches on the PC; with no frame, nothing
-to see react).
-The processes that died with "Text page corruption detected", dyld assertions or a lost Linux thread no longer do
-(`0025` and xnuhost's task layer: 14 minutes past early boot with 129 processes and none of those). The key store is in since `0022`: an AppleKeyStore
-service in software (no passcode, class keys from a constant, key wrap by AES; **not a security boundary**), with
-which launchd's keybag task ends in `DONE MKB_INIT` instead of "FATAL KEYBAG ERROR: failed to load system bag";
-securityd wraps and unwraps its keys through it. A host with one kind of CPU (or one vCPU) used to assert in the
-scheduler at launchd's first `workq_open`; `0016` fixes that (booted with eight CPUs of one kind). Detail: [kernel/patches/oneios-hosted/README.md](kernel/patches/oneios-hosted/README.md)
-and the board, [docs/agents.md](docs/agents.md).
-
-Built and tested on the PC, not yet on the phone: xnuhost and its loader, the GPU path (drm2kgsl on KGSL), the
-display helper, the hardware bridges (CPU, network, Bluetooth, haptics, audio, brightness and the light sensor,
-camera), the image pipeline, the runtime package and releases, and the OneOS fork's iOS 27 card, session scripts and
-Hardware checks, and the iOS user-space cross toolchain with the Metal plug-in built for the iPhone's shared cache
-(not loaded by any boot yet). Not done: the camera's iOS-side capture device, auto-brightness past Apple's light
-sensor service (it attaches to our HID device; no reading has gone through it). Never: passcode, Face ID, Wallet, calls, SMS.
+Detail on hosted patches: [kernel/patches/oneios-hosted/README.md](kernel/patches/oneios-hosted/README.md), [docs/agents.md](docs/agents.md).
 
 ## Layout
 
 ```
 docs/architecture.md  how the parts fit; docs/building.md  how to build and test; docs/*.md  each part in detail
+docs/port-s25-ultra.md  Galaxy S25 Ultra port (this fork)
 profiles/             the pinned IPSW profile (iPhone18,2 iOS 27.0.1 24A446)
 scripts/fetch/        fetch only the needed IPSW members from Apple's CDN (never from here)
 scripts/image/        build the image set (MysticGSI-style manifest, SHA-256, .tar.zst)
@@ -118,3 +120,5 @@ oneos/                the contract with the OneOS fork (akshaynexus/OneOS, branc
 [UniXNU](https://github.com/UniXNU/UniXNU) and [Droid-VM](https://github.com/Droid-VM): XNU on non-Apple
 ARM64, drm2kgsl, the guest drivers. [iOSPlus10](https://github.com/akshaynexus/iOSPlus10): XNU and iOS userland on
 Qualcomm phones, haptics and brightness. [Darling](https://github.com/darlinghq/darling): Mach and XNU on Linux.
+
+Upstream: [akshaynexus/OneiOS](https://github.com/akshaynexus/OneiOS).

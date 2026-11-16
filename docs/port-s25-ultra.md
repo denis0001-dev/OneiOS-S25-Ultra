@@ -1,6 +1,36 @@
 # Port: Galaxy S25 Ultra (SM8750)
 
-Owner: experimental branch in `/private/tmp/OneiOS-s25-port`. Upstream scope is still **S24 Ultra** in [plan.md](plan.md); this doc tracks **S25 Ultra** bring-up.
+Experimental port workspace: `~/OneiOS-s25-port` ([denis0001-dev/OneiOS-S25-Ultra](https://github.com/denis0001-dev/OneiOS-S25-Ultra)). Upstream product scope is still **S24 Ultra** in [plan.md](plan.md); this page tracks **S25 Ultra** bring-up and device results.
+
+## Device validation (2025‑11)
+
+On **SM-S938B**, `pa3q`, **SM8750**, KernelSU:
+
+- Switch preflight and **CPU** layout match the SM8750 fixture (8 CPUs, 2P+6E).
+- **gpuctl** baseline below; **`submit` / `large`** pass on device.
+- Full sessions with the **fork-built `xnuhost`** (Adreno 830 fence path) reached **SpringBoard**; stock release `xnuhost` alone is insufficient for SM8750.
+- **Stuck Apple logo** sessions correlated with bad overlays (custom `boot-args` replacing defaults, SSH seed / trust cache drift, release `xnuhost`). Recovery: restore tarball `data.seed`, `owner-trust`, `overlay/userland/xnuhost.conf` (`scale=3` only), stage `manifest.json` + trust reports, wipe `data.img` only when you mean to reset Data.
+- Long runs can **thermally** throttle or return to One UI; guest Spotlight/indexers worsen heat — see [Spotlight](#spotlight--search-indexing-heat-and-lag).
+- **Wi‑Fi:** default bridge mode; join network in iOS Settings once; networks live on `data.img` (avoid wiping if you want persistence).
+
+## Running a session
+
+One-time: stage **runtime** + **image set** under `/data/local/tmp/oneios` ([building.md](building.md) §6, or the OneOS app import). Install the patched **OneOS `oneios`** APK. Push the SM8750 **`xnuhost`** into the staged runtime if you built locally.
+
+**Switch** (phone only, after staging):
+
+```sh
+su -c 'sh /data/local/tmp/oneios/oneios_switch.sh --check'
+su -c 'sh /data/local/tmp/oneios/oneios_switch.sh'
+```
+
+Or OneOS → **Choose a system** → **iOS 27 (OneiOS)** → experimental acknowledgement → **Switch**.
+
+Preflight may refuse while the battery is warm (~**42 °C**); cool down and retry.
+
+**Return:** Volume **Up + Down** held **3 s**; or `oneios_return.sh`; **Power + Volume Down** reboot as last resort.
+
+**Samsung note:** `oneios_switch.sh` must not bind+remount,ro the session **script files** (kernel error: not in `/proc/mounts`); directories are bound RO; scripts use `chmod 555` (fix in the port’s OneOS fork).
 
 ## Hardware delta from S24 Ultra
 
